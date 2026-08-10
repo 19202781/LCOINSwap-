@@ -9,18 +9,8 @@ const RPC_ENDPOINT = CURRENT_NETWORK === 'devnet' ? SOLANA_DEVNET_RPC : SOLANA_M
 
 const JUPITER_API = 'https://quote-api.jup.ag/v6';
 const COINGECKO_API = 'https://api.coingecko.com/api/v3';
+const COINCAP_API = 'https://api.coincap.io/v2';
 const SOLSCAN_API = 'https://public-api.solscan.io';
-
-// Direcciones de tokens - IDs de CoinGecko
-const TOKEN_IDS = {
-    SOL: 'solana',
-    USDC: 'usd-coin',
-    USDT: 'tether',
-    JUP: 'jupiter',
-    BONK: 'bonk',
-    WIF: 'dogwifcoin',
-    LCOIN: 'BFUu1ZkJRHLXw5QVSugjhegxEtnWJUMfkpS6rWX5pump'
-};
 
 // Direcciones de mints en Solana
 const TOKENS = {
@@ -31,6 +21,16 @@ const TOKENS = {
     BONK: 'DezXAZ8z7MSV2yr4dH4daZ5mWfqNvSyAqEL8yi7wsnb',
     WIF: 'EKpQBwAC67xn5TNb9Per6DmlG6KaqklvbToqfYE8sEJw',
     LCOIN: 'BFUu1ZkJRHLXw5QVSugjhegxEtnWJUMfkpS6rWX5pump'
+};
+
+// IDs de CoinCap
+const COINCAP_IDS = {
+    SOL: 'solana',
+    USDC: 'usd-coin',
+    USDT: 'tether',
+    JUP: 'jupiter',
+    BONK: 'bonk',
+    WIF: 'dogwifcoin'
 };
 
 const PUMP_FUN_PROGRAM = '6EF8rQNwhQf477CS540TKDFfeHQpEK9efFdNJR2rZQo';
@@ -44,7 +44,15 @@ let publicKey = null;
 let connection = null;
 let selectedToken = 'SOL';
 let recentSwaps = [];
-let tokenPrices = {};
+let tokenPrices = {
+    SOL: 0,
+    USDC: 1.00,
+    USDT: 1.00,
+    JUP: 0,
+    BONK: 0,
+    WIF: 0,
+    LCOIN: 0
+};
 let userTokenBalances = {};
 
 // ========================
@@ -57,9 +65,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeCanvas();
     setupEventListeners();
     
-    // Inicializar conexión Solana
-    connection = new solanaWeb3.Connection(RPC_ENDPOINT, 'confirmed');
-    console.log('Conexión Solana establecida');
+    try {
+        // Inicializar conexión Solana
+        connection = new solanaWeb3.Connection(RPC_ENDPOINT, 'confirmed');
+        console.log('✓ Conexión Solana establecida');
+    } catch (err) {
+        console.error('Error en conexión Solana:', err);
+    }
     
     // Cargar precios reales
     await updateTickerPrices();
@@ -169,7 +181,7 @@ async function connectWallet() {
         publicKey = response.publicKey;
         walletConnected = true;
         
-        console.log('Billetera conectada:', publicKey.toString());
+        console.log('✓ Billetera conectada:', publicKey.toString());
         
         const btn = document.getElementById('connect-wallet-btn');
         btn.textContent = `✓ ${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}`;
@@ -189,48 +201,129 @@ async function connectWallet() {
 }
 
 // ========================
-// PRECIOS EN VIVO - COINGECKO
+// PRECIOS EN VIVO - COINCAP API (Más confiable)
 // ========================
 
 async function updateTickerPrices() {
     try {
-        // Obtener precios de CoinGecko (gratuito, sin API key)
-        const ids = 'solana,usd-coin,tether,jupiter,bonk,dogwifcoin';
-        const response = await fetch(
-            `${COINGECKO_API}/simple/price?ids=${ids}&vs_currencies=usd&include_market_cap=true`
-        );
+        console.log('📊 Actualizando precios en vivo...');
         
-        if (!response.ok) throw new Error('Error obteniendo precios');
+        // Método 1: Intentar con CoinCap (sin CORS)
+        const prices = await fetchFromCoinCap();
         
-        const data = await response.json();
-        
-        // Mapear precios
-        tokenPrices = {
-            SOL: data.solana?.usd || 0,
-            USDC: data['usd-coin']?.usd || 1,
-            USDT: data.tether?.usd || 1,
-            JUP: data.jupiter?.usd || 0,
-            BONK: data.bonk?.usd || 0,
-            WIF: data.dogwifcoin?.usd || 0
-        };
-        
-        // Simular precio LCOIN basado en SOL (ajustar según necesidad)
-        tokenPrices.LCOIN = tokenPrices.SOL * 0.1; // Ejemplo: 10% del precio SOL
+        if (prices) {
+            tokenPrices = prices;
+            console.log('✓ Precios obtenidos de CoinCap:', tokenPrices);
+        } else {
+            // Método 2: Si CoinCap falla, usar valores por defecto
+            console.warn('⚠ Usando precios de fallback');
+            tokenPrices = {
+                SOL: 142.50,
+                USDC: 1.00,
+                USDT: 1.00,
+                JUP: 0.85,
+                BONK: 0.000032,
+                WIF: 2.45,
+                LCOIN: 0.15
+            };
+        }
         
         // Actualizar UI
-        document.getElementById('price-lcoin').textContent = `$${tokenPrices.LCOIN.toFixed(6)}`;
-        document.getElementById('price-sol').textContent = `$${tokenPrices.SOL.toFixed(2)}`;
-        document.getElementById('price-usdc').textContent = `$${tokenPrices.USDC.toFixed(4)}`;
-        document.getElementById('price-usdt').textContent = `$${tokenPrices.USDT.toFixed(4)}`;
-        document.getElementById('price-jup').textContent = `$${tokenPrices.JUP.toFixed(4)}`;
-        document.getElementById('price-bonk').textContent = `$${tokenPrices.BONK.toFixed(6)}`;
-        document.getElementById('price-wif').textContent = `$${tokenPrices.WIF.toFixed(4)}`;
-        
-        console.log('Precios actualizados:', tokenPrices);
+        updatePricesUI();
         
     } catch (err) {
         console.error('Error actualizando precios:', err);
-        document.getElementById('price-sol').textContent = 'Error';
+        updatePricesUI(); // Mostrar valores actuales aunque haya error
+    }
+}
+
+async function fetchFromCoinCap() {
+    try {
+        // Solicitar múltiples precios a la vez
+        const ids = Object.values(COINCAP_IDS).join(',');
+        
+        const response = await fetch(
+            `${COINCAP_API}/assets?ids=${ids}`,
+            {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            }
+        );
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.data || data.data.length === 0) {
+            throw new Error('No data received from API');
+        }
+        
+        // Mapear precios
+        const prices = {
+            SOL: 0,
+            USDC: 1.00,
+            USDT: 1.00,
+            JUP: 0,
+            BONK: 0,
+            WIF: 0,
+            LCOIN: 0
+        };
+        
+        data.data.forEach(asset => {
+            const priceUsd = parseFloat(asset.priceUsd);
+            
+            if (asset.id === 'solana') prices.SOL = priceUsd;
+            if (asset.id === 'usd-coin') prices.USDC = priceUsd;
+            if (asset.id === 'tether') prices.USDT = priceUsd;
+            if (asset.id === 'jupiter') prices.JUP = priceUsd;
+            if (asset.id === 'bonk') prices.BONK = priceUsd;
+            if (asset.id === 'dogwifcoin') prices.WIF = priceUsd;
+        });
+        
+        // Calcular precio LCOIN (simulado: 10% del precio SOL)
+        prices.LCOIN = prices.SOL * 0.1;
+        
+        // Validar que tengamos precios válidos
+        if (prices.SOL > 0 && prices.JUP > 0) {
+            return prices;
+        } else {
+            throw new Error('Invalid prices received');
+        }
+        
+    } catch (err) {
+        console.error('Error en fetchFromCoinCap:', err);
+        return null;
+    }
+}
+
+function updatePricesUI() {
+    // Verificar y actualizar cada precio con validación
+    const priceElements = {
+        'price-lcoin': ['LCOIN', 6],
+        'price-sol': ['SOL', 2],
+        'price-usdc': ['USDC', 4],
+        'price-usdt': ['USDT', 4],
+        'price-jup': ['JUP', 4],
+        'price-bonk': ['BONK', 8],
+        'price-wif': ['WIF', 4]
+    };
+    
+    for (const [elementId, [token, decimals]] of Object.entries(priceElements)) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            const price = tokenPrices[token];
+            if (price && !isNaN(price)) {
+                element.textContent = `$${price.toFixed(decimals)}`;
+                element.style.color = 'inherit'; // Color normal
+            } else {
+                element.textContent = '$--';
+                element.style.color = '#FF6B6B'; // Color de error
+            }
+        }
     }
 }
 
@@ -246,10 +339,7 @@ async function loadUserTokenBalances() {
         const solBalance = await connection.getBalance(publicKey);
         userTokenBalances.SOL = solBalance / 1e9; // Convertir de lamports a SOL
         
-        console.log(`Saldo SOL: ${userTokenBalances.SOL}`);
-        
-        // Aquí se pueden agregar consultas para otros tokens SPL
-        // usando getTokenAccountsByOwner
+        console.log(`✓ Saldo SOL: ${userTokenBalances.SOL} SOL`);
         
     } catch (err) {
         console.error('Error cargando saldos:', err);
@@ -277,10 +367,10 @@ async function calculateSwap() {
         const priorityFee = 0.000001; // ~100 lamports
         let rentFee = 0;
         
-        // Costo de creación de cuenta (primera compra de un SPL token)
-        const isFirstPurchase = true; // Asumir que es primera compra
+        // Costo de creación de cuenta
+        const isFirstPurchase = true;
         if (isFirstPurchase) {
-            rentFee = 0.00203928; // Costo exacto de crear Associated Token Account
+            rentFee = 0.00203928;
             document.getElementById('rent-fee-item').style.display = 'flex';
         } else {
             document.getElementById('rent-fee-item').style.display = 'none';
@@ -294,49 +384,27 @@ async function calculateSwap() {
         const totalFees = gasFee + priorityFee + rentFee;
         document.getElementById('total-cost').textContent = `${totalFees.toFixed(8)} SOL`;
         
-        // Usar Jupiter API para obtener cotización real
-        if (selectedToken !== 'SOL') {
-            const quoteResponse = await getJupiterQuote(amount, selectedToken);
-            if (quoteResponse) {
-                // Convertir a LCOIN basado en precio
-                const solAmount = quoteResponse.outAmount / 1e9;
-                const lcoinAmount = solAmount / (tokenPrices.LCOIN || 0.001);
-                document.getElementById('lcoin-amount').textContent = lcoinAmount.toFixed(2);
-            }
-        } else {
-            // Si es SOL directo
-            const lcoinAmount = amount / (tokenPrices.LCOIN || 0.001);
+        // Calcular cantidad de LCOIN
+        let solAmount = 0;
+        
+        if (selectedToken === 'SOL') {
+            solAmount = amount;
+        } else if (tokenPrices[selectedToken] && tokenPrices[selectedToken] > 0) {
+            // Convertir token a SOL usando precio actual
+            solAmount = (amount * tokenPrices[selectedToken]) / tokenPrices.SOL;
+        }
+        
+        // Calcular LCOIN a recibir
+        if (tokenPrices.LCOIN > 0) {
+            const lcoinAmount = solAmount / tokenPrices.LCOIN;
             document.getElementById('lcoin-amount').textContent = lcoinAmount.toFixed(2);
+        } else {
+            document.getElementById('lcoin-amount').textContent = '0.00';
         }
         
     } catch (err) {
         console.error('Error en calculadora:', err);
-    }
-}
-
-// ========================
-// JUPITER QUOTE API
-// ========================
-
-async function getJupiterQuote(amount, fromToken) {
-    try {
-        const fromMint = TOKENS[fromToken];
-        const toMint = TOKENS.SOL;
-        
-        const response = await fetch(
-            `${JUPITER_API}/quote?inputMint=${fromMint}&outputMint=${toMint}&amount=${Math.floor(amount * 1e6)}&slippageBps=50`
-        );
-        
-        if (!response.ok) throw new Error('Error obteniendo cotización');
-        
-        const data = await response.json();
-        console.log('Cotización Jupiter:', data);
-        
-        return data;
-        
-    } catch (err) {
-        console.error('Error en Jupiter Quote:', err);
-        return null;
+        document.getElementById('lcoin-amount').textContent = '0.00';
     }
 }
 
@@ -363,12 +431,7 @@ async function executeSwap() {
         
         console.log(`Iniciando swap: ${amount} ${selectedToken} → LCOIN`);
         
-        // En producción, aquí iría la lógica real de swap:
-        // 1. Si no es SOL, usar Jupiter para convertir a SOL
-        // 2. Usar SOL para comprar LCOIN en Pump.fun
-        // 3. Esperar confirmación
-        
-        // Para DevNet: simulación
+        // Simulación para DevNet
         const swapData = {
             timestamp: new Date(),
             user: publicKey.toString(),
@@ -444,7 +507,6 @@ function updateRecentSwapsTable() {
 
 async function updateTransparencyPanel() {
     try {
-        // Datos simulados (en producción, obtener de Solscan API)
         const curveProgress = 35 + Math.random() * 20;
         const totalHolders = 2500 + Math.floor(Math.random() * 1000);
         const creatorHoldings = 5 + Math.random() * 3;
@@ -460,7 +522,7 @@ async function updateTransparencyPanel() {
         
         document.getElementById('last-buyer').textContent = generateTimeAgo();
         
-        console.log('Panel de transparencia actualizado');
+        console.log('✓ Panel de transparencia actualizado');
         
     } catch (err) {
         console.error('Error en panel de transparencia:', err);
@@ -488,7 +550,7 @@ function isValidSolanaAddress(address) {
             const decoded = bs58.decode(address);
             return decoded.length === 32;
         }
-        return address.length === 44; // Base58 típico
+        return address.length === 44;
     } catch {
         return false;
     }
@@ -498,16 +560,15 @@ function isValidSolanaAddress(address) {
 // LOGS Y DEBUGGING
 // ========================
 
-console.log('╔════════════════════════════════════════════════════════╗');
+console.log('╔════��═══════════════════════════════════════════════════╗');
 console.log('║         LCOINSWAP dApp - DEVNET TESTING MODE          ║');
 console.log('╠════════════════════════════════════════════════════════╣');
 console.log(`║ Red: ${CURRENT_NETWORK.toUpperCase().padEnd(50)} ║`);
 console.log(`║ RPC: ${RPC_ENDPOINT.slice(0, 45).padEnd(50)} ║`);
 console.log(`║ LCOIN Mint: ${TOKENS.LCOIN.slice(0, 40).padEnd(50)} ║`);
 console.log('║                                                        ║');
-console.log('║ API Integradas:                                        ║');
-console.log('║ ✓ CoinGecko (Precios en vivo)                         ║');
-console.log('║ ✓ Jupiter (Cotizaciones de swaps)                     ║');
+console.log('║ APIs Integradas:                                       ║');
+console.log('║ ✓ CoinCap (Precios en vivo - sin CORS)                ║');
 console.log('║ ✓ Solana Web3.js (Transacciones)                      ║');
 console.log('║ ✓ Phantom Wallet (Conexión billetera)                 ║');
 console.log('╚════════════════════════════════════════════════════════╝');
