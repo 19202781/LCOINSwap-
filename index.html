@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="LCOINSWAP - Herramienta descentralizada para intercambiar tokens SPL por LCOIN en la red Solana">
+    <meta name="theme-color" content="#0A0F1A">
+    
+    <!-- Seguridad -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' https://api.mainnet-beta.solana.com https://quote-api.jup.ag https://public-api.solscan.io https://api.pump.fun;">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Estilos -->
+    <link rel="stylesheet" href="style.css">
+    
+    <title>LCOINSWAP - Intercambio Descentralizado de Tokens SPL por LCOIN</title>
+</head>
+<body>
+    <!-- Canvas para fondo animado -->
+    <canvas id="background-canvas"></canvas>
+    
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo">
+                <div class="logo-circle"></div>
+                <span class="logo-text">LCOINSWAP</span>
+            </div>
+            <button class="btn-connect" id="connect-wallet-btn">Connect Motor</button>
+        </div>
+    </header>
+    
+    <!-- Ticker Bar -->
+    <div class="ticker-bar">
+        <div class="ticker-content" id="ticker-content">
+            <span class="ticker-item"><strong>LCOIN:</strong> <span id="price-lcoin">$0.00</span></span>
+            <span class="ticker-separator">•</span>
+            <span class="ticker-item"><strong>SOL:</strong> <span id="price-sol">$0.00</span></span>
+            <span class="ticker-separator">•</span>
+            <span class="ticker-item"><strong>USDC:</strong> <span id="price-usdc">$0.00</span></span>
+            <span class="ticker-separator">•</span>
+            <span class="ticker-item"><strong>USDT:</strong> <span id="price-usdt">$0.00</span></span>
+            <span class="ticker-separator">•</span>
+            <span class="ticker-item"><strong>JUP:</strong> <span id="price-jup">$0.00</span></span>
+            <span class="ticker-separator">•</span>
+            <span class="ticker-item"><strong>BONK:</strong> <span id="price-bonk">$0.00</span></span>
+            <span class="ticker-separator">•</span>
+            <span class="ticker-item"><strong>WIF:</strong> <span id="price-wif">$0.00</span></span>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <main class="main-container">
+        <!-- Mini-Guía -->
+        <section class="mini-guide">
+            <h2>¿Cómo usar LCOINSWAP?</h2>
+            <div class="guide-steps">
+                <div class="guide-step">
+                    <div class="step-number">1</div>
+                    <h3>Conecta tu Billetera</h3>
+                    <p>Haz clic en "Connect Motor" y selecciona tu billetera (Phantom, Solflare, Backpack, etc.)</p>
+                </div>
+                <div class="guide-step">
+                    <div class="step-number">2</div>
+                    <h3>Selecciona tu Token</h3>
+                    <p>Elige el token que deseas intercambiar (SOL, USDC, USDT, JUP, BONK, WIF o cualquier SPL)</p>
+                </div>
+                <div class="guide-step">
+                    <div class="step-number">3</div>
+                    <h3>Completa el Swap</h3>
+                    <p>Ingresa la cantidad, revisa las comisiones y confirma la transacción en tu billetera</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Swap Calculator -->
+        <section class="swap-section">
+            <div class="swap-calculator">
+                <h2>Calculadora de Swap</h2>
+                
+                <!-- Selector de Token -->
+                <div class="form-group">
+                    <label for="token-select">Token a Intercambiar</label>
+                    <select id="token-select" class="token-select">
+                        <option value="SOL">SOL (Solana)</option>
+                        <option value="EPjFWdd5Au...">USDC</option>
+                        <option value="Es9vMFrzac...">USDT</option>
+                        <option value="JupjG2KY46...">JUP (Jupiter)</option>
+                        <option value="DezXAZ8z7M...">BONK</option>
+                        <option value="EKpQBwAC67...">WIF</option>
+                        <option value="custom">Otro Token (pega la dirección mint)</option>
+                    </select>
+                </div>
+                
+                <!-- Input de dirección mint personalizada -->
+                <div class="form-group" id="custom-mint-group" style="display: none;">
+                    <label for="custom-mint">Dirección Mint del Token</label>
+                    <input type="text" id="custom-mint" placeholder="Ejemplo: DezXAZ8z7MwVj8ytsXq08RQ..." class="input-field">
+                </div>
+                
+                <!-- Input de cantidad -->
+                <div class="form-group">
+                    <label for="amount-input">Cantidad a Gastar</label>
+                    <input type="number" id="amount-input" placeholder="0.00" class="input-field" min="0" step="0.01">
+                </div>
+                
+                <!-- Desglose de comisiones -->
+                <div class="fee-breakdown">
+                    <h3>Desglose de Comisiones</h3>
+                    <div class="fee-item">
+                        <span>Gas Fee Base:</span>
+                        <span id="gas-fee">0.00005 SOL</span>
+                    </div>
+                    <div class="fee-item">
+                        <span>Priority Fee:</span>
+                        <span id="priority-fee">0.00001 SOL</span>
+                    </div>
+                    <div class="fee-item" id="rent-fee-item" style="display: none;">
+                        <span>Creación de Cuenta (primera vez):</span>
+                        <span id="rent-fee">0.002 SOL</span>
+                    </div>
+                    <div class="fee-item total">
+                        <span>Costo Total Aproximado:</span>
+                        <span id="total-cost">0.00006 SOL</span>
+                    </div>
+                </div>
+                
+                <!-- Estimado de LCOIN a recibir -->
+                <div class="lcoin-estimate">
+                    <h3>Recibirás Aproximadamente:</h3>
+                    <div class="estimate-amount">
+                        <span id="lcoin-amount">0.00</span>
+                        <span class="lcoin-symbol">LCN</span>
+                    </div>
+                    <p class="estimate-note">* Este es un estimado. La cantidad final puede variar según las condiciones del mercado.</p>
+                </div>
+                
+                <!-- Botón de Swap -->
+                <button class="btn-swap" id="swap-button" disabled>Conecta tu Billetera para Continuar</button>
+                <p class="swap-note">Por favor, conecta tu billetera para proceder con el swap.</p>
+            </div>
+        </section>
+        
+        <!-- Recent Swaps History -->
+        <section class="recent-swaps">
+            <h2>Últimos Swaps</h2>
+            <div class="swaps-table-container">
+                <table class="swaps-table">
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Usuario</th>
+                            <th>Token</th>
+                            <th>Cantidad</th>
+                            <th>LCOIN Recibido</th>
+                            <th>Enlace Solscan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="swaps-tbody">
+                        <tr class="empty-row">
+                            <td colspan="6">No hay swaps registrados aún. ¡Sé el primero!</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
+        <!-- Transparency Panel -->
+        <section class="transparency-panel">
+            <h2>Panel de Transparencia On-Chain</h2>
+            <div class="transparency-grid">
+                <div class="transparency-card">
+                    <h3>Progreso Bonding Curve</h3>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="curve-progress" style="width: 35%;"></div>
+                    </div>
+                    <p id="curve-progress-text">35% completado</p>
+                </div>
+                
+                <div class="transparency-card">
+                    <h3>Holders Totales</h3>
+                    <p class="big-number" id="total-holders">2,547</p>
+                </div>
+                
+                <div class="transparency-card">
+                    <h3>Tenencia del Creador</h3>
+                    <p class="big-number" id="creator-holdings">5.2%</p>
+                </div>
+                
+                <div class="transparency-card">
+                    <h3>Último Comprador</h3>
+                    <p class="small-text" id="last-buyer">Hace 2 minutos</p>
+                </div>
+            </div>
+            <p class="transparency-note">* Datos actualizados en tiempo real desde la blockchain de Solana.</p>
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 LCOINSWAP. Herramienta descentralizada del ecosistema LCOIN.</p>
+            <div class="footer-links">
+                <a href="https://lcoin.example.com" target="_blank" rel="noopener noreferrer">Landing Page</a>
+                <span class="separator">|</span>
+                <a href="https://twitter.com/lcoin" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
+                <span class="separator">|</span>
+                <a href="https://t.me/lcoin" target="_blank" rel="noopener noreferrer">Telegram</a>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.91.0/lib/index.iife.js"></script>
+    <script src="https://unpkg.com/@solana/wallet-adapter-wallets@0.19.34/lib/index.umd.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
