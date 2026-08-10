@@ -3,21 +3,37 @@
 // ========================
 
 const SOLANA_MAINNET_RPC = 'https://api.mainnet-beta.solana.com';
+const SOLANA_DEVNET_RPC = 'https://api.devnet.solana.com';
+const CURRENT_NETWORK = 'devnet'; // Cambiar a 'mainnet' después de pruebas
+const RPC_ENDPOINT = CURRENT_NETWORK === 'devnet' ? SOLANA_DEVNET_RPC : SOLANA_MAINNET_RPC;
+
 const JUPITER_API = 'https://quote-api.jup.ag/v6';
+const COINGECKO_API = 'https://api.coingecko.com/api/v3';
 const SOLSCAN_API = 'https://public-api.solscan.io';
 
-// Direcciones de tokens
+// Direcciones de tokens - IDs de CoinGecko
+const TOKEN_IDS = {
+    SOL: 'solana',
+    USDC: 'usd-coin',
+    USDT: 'tether',
+    JUP: 'jupiter',
+    BONK: 'bonk',
+    WIF: 'dogwifcoin',
+    LCOIN: 'BFUu1ZkJRHLXw5QVSugjhegxEtnWJUMfkpS6rWX5pump'
+};
+
+// Direcciones de mints en Solana
 const TOKENS = {
     SOL: 'So11111111111111111111111111111111111111112',
     USDC: 'EPjFWdd5Au17yNArtfycYoYhxKV7UmXUg9x1tMHRLjX',
     USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BcaMoxPH',
     JUP: 'JupitaGe24S7f8wKcqadg54K5LBL4quwJyKsPQwhitney',
     BONK: 'DezXAZ8z7MSV2yr4dH4daZ5mWfqNvSyAqEL8yi7wsnb',
-    WIF: 'EKpQBwAC67xn5TNb9Per6DmlG6KaqklvbToqfYE8sEJw'
+    WIF: 'EKpQBwAC67xn5TNb9Per6DmlG6KaqklvbToqfYE8sEJw',
+    LCOIN: 'BFUu1ZkJRHLXw5QVSugjhegxEtnWJUMfkpS6rWX5pump'
 };
 
-const LCOIN_MINT = 'LCNFcz2qr1E8kqGWnQhxNjt9LCZQ4EZrNhPgaBnrwRL'; // Dirección ficticia, reemplazar
-const PUMP_FUN_PROGRAM = '6EF8rQNwhQf477CS540TKDFfeHQpEK9efFdNJR2rZQo'; // Programa de Pump.fun
+const PUMP_FUN_PROGRAM = '6EF8rQNwhQf477CS540TKDFfeHQpEK9efFdNJR2rZQo';
 
 // ========================
 // VARIABLES GLOBALES
@@ -28,19 +44,30 @@ let publicKey = null;
 let connection = null;
 let selectedToken = 'SOL';
 let recentSwaps = [];
+let tokenPrices = {};
+let userTokenBalances = {};
 
 // ========================
 // INICIALIZACIÓN
 // ========================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log(`LCOINSWAP iniciando en red: ${CURRENT_NETWORK}`);
+    
     initializeCanvas();
     setupEventListeners();
-    updateTickerPrices();
-    setInterval(updateTickerPrices, 180000); // Actualizar cada 3 minutos
+    
+    // Inicializar conexión Solana
+    connection = new solanaWeb3.Connection(RPC_ENDPOINT, 'confirmed');
+    console.log('Conexión Solana establecida');
+    
+    // Cargar precios reales
+    await updateTickerPrices();
+    setInterval(updateTickerPrices, 60000); // Actualizar cada minuto
+    
     loadRecentSwaps();
-    updateTransparencyPanel();
-    setInterval(updateTransparencyPanel, 60000); // Actualizar cada minuto
+    await updateTransparencyPanel();
+    setInterval(updateTransparencyPanel, 60000);
 });
 
 // ========================
@@ -49,6 +76,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initializeCanvas() {
     const canvas = document.getElementById('background-canvas');
+    if (!canvas) return;
+    
     const ctx = canvas.getContext('2d');
     
     canvas.width = window.innerWidth;
@@ -57,7 +86,6 @@ function initializeCanvas() {
     const particles = [];
     const particleCount = 100;
     
-    // Crear partículas
     for (let i = 0; i < particleCount; i++) {
         particles.push({
             x: Math.random() * canvas.width,
@@ -73,22 +101,18 @@ function initializeCanvas() {
         ctx.fillStyle = 'rgba(10, 15, 26, 1)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Dibujar partículas
         particles.forEach(particle => {
             ctx.fillStyle = `rgba(0, 240, 255, ${particle.opacity})`;
             ctx.beginPath();
             ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
             ctx.fill();
             
-            // Mover partícula
             particle.x += particle.speedX;
             particle.y += particle.speedY;
             
-            // Rebote en bordes
             if (particle.x < 0 || particle.x > canvas.width) particle.speedX *= -1;
             if (particle.y < 0 || particle.y > canvas.height) particle.speedY *= -1;
             
-            // Mantener dentro del canvas
             particle.x = Math.max(0, Math.min(canvas.width, particle.x));
             particle.y = Math.max(0, Math.min(canvas.height, particle.y));
         });
@@ -101,7 +125,6 @@ function initializeCanvas() {
     
     animate();
     
-    // Redimensionar canvas al cambiar ventana
     window.addEventListener('resize', () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -113,10 +136,8 @@ function initializeCanvas() {
 // ========================
 
 function setupEventListeners() {
-    // Botón conectar billetera
     document.getElementById('connect-wallet-btn').addEventListener('click', connectWallet);
     
-    // Selector de token
     document.getElementById('token-select').addEventListener('change', (e) => {
         selectedToken = e.target.value;
         if (selectedToken === 'custom') {
@@ -127,10 +148,7 @@ function setupEventListeners() {
         calculateSwap();
     });
     
-    // Input de cantidad
     document.getElementById('amount-input').addEventListener('input', calculateSwap);
-    
-    // Botón swap
     document.getElementById('swap-button').addEventListener('click', executeSwap);
 }
 
@@ -143,7 +161,7 @@ async function connectWallet() {
         const { solana } = window;
         
         if (!solana) {
-            alert('Por favor instala Phantom Wallet o una billetera compatible');
+            alert('Por favor instala Phantom Wallet o una billetera compatible\nDescarga en: https://phantom.app');
             return;
         }
         
@@ -151,52 +169,90 @@ async function connectWallet() {
         publicKey = response.publicKey;
         walletConnected = true;
         
-        // Actualizar UI
+        console.log('Billetera conectada:', publicKey.toString());
+        
         const btn = document.getElementById('connect-wallet-btn');
-        btn.textContent = `Conectado: ${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}`;
+        btn.textContent = `✓ ${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}`;
         btn.classList.add('connected');
         
-        // Habilitar botón de swap
         document.getElementById('swap-button').disabled = false;
         document.getElementById('swap-button').textContent = 'Swap to LCOIN';
         document.querySelector('.swap-note').textContent = 'Conectado. Listo para hacer swap.';
         
-        // Conectar con Solana
-        connection = new solanaWeb3.Connection(SOLANA_MAINNET_RPC, 'confirmed');
+        // Cargar saldos de usuario
+        await loadUserTokenBalances();
         
     } catch (err) {
         console.error('Error conectando billetera:', err);
-        alert('Error al conectar la billetera');
+        alert(`Error: ${err.message}`);
     }
 }
 
 // ========================
-// TICKER DE PRECIOS
+// PRECIOS EN VIVO - COINGECKO
 // ========================
 
 async function updateTickerPrices() {
     try {
-        // Precios simulados (reemplazar con API real como CoinGecko)
-        const prices = {
-            LCOIN: (Math.random() * 0.5 + 0.5).toFixed(4),
-            SOL: (Math.random() * 50 + 150).toFixed(2),
-            USDC: (Math.random() * 0.01 + 0.99).toFixed(4),
-            USDT: (Math.random() * 0.01 + 0.99).toFixed(4),
-            JUP: (Math.random() * 1 + 0.8).toFixed(4),
-            BONK: (Math.random() * 0.00005 + 0.00003).toFixed(6),
-            WIF: (Math.random() * 2 + 2.5).toFixed(4)
+        // Obtener precios de CoinGecko (gratuito, sin API key)
+        const ids = 'solana,usd-coin,tether,jupiter,bonk,dogwifcoin';
+        const response = await fetch(
+            `${COINGECKO_API}/simple/price?ids=${ids}&vs_currencies=usd&include_market_cap=true`
+        );
+        
+        if (!response.ok) throw new Error('Error obteniendo precios');
+        
+        const data = await response.json();
+        
+        // Mapear precios
+        tokenPrices = {
+            SOL: data.solana?.usd || 0,
+            USDC: data['usd-coin']?.usd || 1,
+            USDT: data.tether?.usd || 1,
+            JUP: data.jupiter?.usd || 0,
+            BONK: data.bonk?.usd || 0,
+            WIF: data.dogwifcoin?.usd || 0
         };
         
-        document.getElementById('price-lcoin').textContent = `$${prices.LCOIN}`;
-        document.getElementById('price-sol').textContent = `$${prices.SOL}`;
-        document.getElementById('price-usdc').textContent = `$${prices.USDC}`;
-        document.getElementById('price-usdt').textContent = `$${prices.USDT}`;
-        document.getElementById('price-jup').textContent = `$${prices.JUP}`;
-        document.getElementById('price-bonk').textContent = `$${prices.BONK}`;
-        document.getElementById('price-wif').textContent = `$${prices.WIF}`;
+        // Simular precio LCOIN basado en SOL (ajustar según necesidad)
+        tokenPrices.LCOIN = tokenPrices.SOL * 0.1; // Ejemplo: 10% del precio SOL
+        
+        // Actualizar UI
+        document.getElementById('price-lcoin').textContent = `$${tokenPrices.LCOIN.toFixed(6)}`;
+        document.getElementById('price-sol').textContent = `$${tokenPrices.SOL.toFixed(2)}`;
+        document.getElementById('price-usdc').textContent = `$${tokenPrices.USDC.toFixed(4)}`;
+        document.getElementById('price-usdt').textContent = `$${tokenPrices.USDT.toFixed(4)}`;
+        document.getElementById('price-jup').textContent = `$${tokenPrices.JUP.toFixed(4)}`;
+        document.getElementById('price-bonk').textContent = `$${tokenPrices.BONK.toFixed(6)}`;
+        document.getElementById('price-wif').textContent = `$${tokenPrices.WIF.toFixed(4)}`;
+        
+        console.log('Precios actualizados:', tokenPrices);
         
     } catch (err) {
         console.error('Error actualizando precios:', err);
+        document.getElementById('price-sol').textContent = 'Error';
+    }
+}
+
+// ========================
+// CARGAR SALDOS DE USUARIO
+// ========================
+
+async function loadUserTokenBalances() {
+    if (!publicKey || !connection) return;
+    
+    try {
+        // Obtener saldo SOL nativo
+        const solBalance = await connection.getBalance(publicKey);
+        userTokenBalances.SOL = solBalance / 1e9; // Convertir de lamports a SOL
+        
+        console.log(`Saldo SOL: ${userTokenBalances.SOL}`);
+        
+        // Aquí se pueden agregar consultas para otros tokens SPL
+        // usando getTokenAccountsByOwner
+        
+    } catch (err) {
+        console.error('Error cargando saldos:', err);
     }
 }
 
@@ -216,37 +272,71 @@ async function calculateSwap() {
     try {
         const amount = parseFloat(amountInput);
         
-        // Gas fees estimados
-        const gasFee = 0.00005;
-        const priorityFee = 0.00001;
+        // Fees reales de Solana
+        const gasFee = 0.00005; // ~5,000 lamports
+        const priorityFee = 0.000001; // ~100 lamports
         let rentFee = 0;
         
-        // Simular costo de creación de cuenta (primera compra)
-        const isFirstPurchase = Math.random() > 0.7; // 30% de probabilidad
+        // Costo de creación de cuenta (primera compra de un SPL token)
+        const isFirstPurchase = true; // Asumir que es primera compra
         if (isFirstPurchase) {
-            rentFee = 0.002;
+            rentFee = 0.00203928; // Costo exacto de crear Associated Token Account
             document.getElementById('rent-fee-item').style.display = 'flex';
         } else {
             document.getElementById('rent-fee-item').style.display = 'none';
         }
         
-        // Actualizar fees
-        document.getElementById('gas-fee').textContent = `${gasFee} SOL`;
-        document.getElementById('priority-fee').textContent = `${priorityFee} SOL`;
-        document.getElementById('rent-fee').textContent = `${rentFee} SOL`;
+        // Actualizar fees en UI
+        document.getElementById('gas-fee').textContent = `${gasFee.toFixed(8)} SOL`;
+        document.getElementById('priority-fee').textContent = `${priorityFee.toFixed(8)} SOL`;
+        document.getElementById('rent-fee').textContent = `${rentFee.toFixed(8)} SOL`;
         
         const totalFees = gasFee + priorityFee + rentFee;
-        document.getElementById('total-cost').textContent = `${totalFees.toFixed(6)} SOL`;
+        document.getElementById('total-cost').textContent = `${totalFees.toFixed(8)} SOL`;
         
-        // Calcular LCOIN a recibir (simulado)
-        // En la práctica, usar Jupiter API para conversión a SOL, luego Pump.fun para compra
-        const solAmount = selectedToken === 'SOL' ? amount : amount * (0.5 + Math.random()); // Precio simulado
-        const lcoinAmount = solAmount * (Math.random() * 1000 + 500); // Precio LCOIN simulado
-        
-        document.getElementById('lcoin-amount').textContent = lcoinAmount.toFixed(2);
+        // Usar Jupiter API para obtener cotización real
+        if (selectedToken !== 'SOL') {
+            const quoteResponse = await getJupiterQuote(amount, selectedToken);
+            if (quoteResponse) {
+                // Convertir a LCOIN basado en precio
+                const solAmount = quoteResponse.outAmount / 1e9;
+                const lcoinAmount = solAmount / (tokenPrices.LCOIN || 0.001);
+                document.getElementById('lcoin-amount').textContent = lcoinAmount.toFixed(2);
+            }
+        } else {
+            // Si es SOL directo
+            const lcoinAmount = amount / (tokenPrices.LCOIN || 0.001);
+            document.getElementById('lcoin-amount').textContent = lcoinAmount.toFixed(2);
+        }
         
     } catch (err) {
         console.error('Error en calculadora:', err);
+    }
+}
+
+// ========================
+// JUPITER QUOTE API
+// ========================
+
+async function getJupiterQuote(amount, fromToken) {
+    try {
+        const fromMint = TOKENS[fromToken];
+        const toMint = TOKENS.SOL;
+        
+        const response = await fetch(
+            `${JUPITER_API}/quote?inputMint=${fromMint}&outputMint=${toMint}&amount=${Math.floor(amount * 1e6)}&slippageBps=50`
+        );
+        
+        if (!response.ok) throw new Error('Error obteniendo cotización');
+        
+        const data = await response.json();
+        console.log('Cotización Jupiter:', data);
+        
+        return data;
+        
+    } catch (err) {
+        console.error('Error en Jupiter Quote:', err);
+        return null;
     }
 }
 
@@ -269,42 +359,44 @@ async function executeSwap() {
     try {
         const btn = document.getElementById('swap-button');
         btn.disabled = true;
-        btn.textContent = 'Procesando...';
+        btn.textContent = 'Procesando Transacción...';
         
-        // Simular proceso de swap
-        // 1. Si el token no es SOL, convertir a SOL usando Jupiter
-        // 2. Usar el SOL para comprar LCOIN en Pump.fun
+        console.log(`Iniciando swap: ${amount} ${selectedToken} → LCOIN`);
         
+        // En producción, aquí iría la lógica real de swap:
+        // 1. Si no es SOL, usar Jupiter para convertir a SOL
+        // 2. Usar SOL para comprar LCOIN en Pump.fun
+        // 3. Esperar confirmación
+        
+        // Para DevNet: simulación
         const swapData = {
             timestamp: new Date(),
             user: publicKey.toString(),
             token: selectedToken,
             amount: parseFloat(amount),
             lcoinReceived: parseFloat(document.getElementById('lcoin-amount').textContent),
-            txHash: generateMockTxHash(),
-            status: 'completed'
+            txHash: 'https://solscan.io/tx/test',
+            status: 'completed',
+            network: CURRENT_NETWORK
         };
         
-        // Guardar en historial
         recentSwaps.unshift(swapData);
         if (recentSwaps.length > 10) recentSwaps.pop();
         localStorage.setItem('recentSwaps', JSON.stringify(recentSwaps));
         
-        // Actualizar tabla
         updateRecentSwapsTable();
         
-        // Reset form
         document.getElementById('amount-input').value = '';
         calculateSwap();
         
-        alert('¡Swap completado exitosamente! Revisa tu billetera para confirmar.');
+        alert(`✓ Swap simulado exitosamente en ${CURRENT_NETWORK}!\n\nEn producción, revisarías la transacción en Solscan.`);
         
         btn.disabled = false;
         btn.textContent = 'Swap to LCOIN';
         
     } catch (err) {
         console.error('Error en swap:', err);
-        alert('Error al ejecutar el swap');
+        alert(`Error: ${err.message}`);
         document.getElementById('swap-button').disabled = false;
         document.getElementById('swap-button').textContent = 'Swap to LCOIN';
     }
@@ -332,12 +424,16 @@ function updateRecentSwapsTable() {
     
     tbody.innerHTML = recentSwaps.map(swap => `
         <tr>
-            <td>${new Date(swap.timestamp).toLocaleTimeString()}</td>
+            <td>${new Date(swap.timestamp).toLocaleTimeString('es-ES')}</td>
             <td>${swap.user.slice(0, 4)}...${swap.user.slice(-4)}</td>
             <td>${swap.token}</td>
             <td>${swap.amount.toFixed(4)}</td>
             <td>${swap.lcoinReceived.toFixed(2)} LCN</td>
-            <td><a href="https://solscan.io/tx/${swap.txHash}" target="_blank" rel="noopener noreferrer">Ver en Solscan</a></td>
+            <td>
+                <a href="${swap.txHash}" target="_blank" rel="noopener noreferrer">
+                    ${swap.network === 'devnet' ? 'Simulado' : 'Ver'}
+                </a>
+            </td>
         </tr>
     `).join('');
 }
@@ -348,23 +444,26 @@ function updateRecentSwapsTable() {
 
 async function updateTransparencyPanel() {
     try {
-        // Simular datos on-chain
-        const curveProgress = Math.random() * 100;
-        const totalHolders = Math.floor(Math.random() * 5000 + 1000);
-        const creatorHoldings = Math.random() * 20 + 5;
+        // Datos simulados (en producción, obtener de Solscan API)
+        const curveProgress = 35 + Math.random() * 20;
+        const totalHolders = 2500 + Math.floor(Math.random() * 1000);
+        const creatorHoldings = 5 + Math.random() * 3;
         
-        // Actualizar UI
         document.getElementById('curve-progress').style.width = curveProgress + '%';
-        document.getElementById('curve-progress-text').textContent = `${curveProgress.toFixed(1)}% completado`;
+        document.getElementById('curve-progress-text').textContent = 
+            `${curveProgress.toFixed(1)}% completado`;
         
-        document.getElementById('total-holders').textContent = totalHolders.toLocaleString();
-        document.getElementById('creator-holdings').textContent = creatorHoldings.toFixed(2) + '%';
+        document.getElementById('total-holders').textContent = 
+            totalHolders.toLocaleString();
+        document.getElementById('creator-holdings').textContent = 
+            creatorHoldings.toFixed(2) + '%';
         
-        const lastBuyerTime = generateTimeAgo();
-        document.getElementById('last-buyer').textContent = lastBuyerTime;
+        document.getElementById('last-buyer').textContent = generateTimeAgo();
+        
+        console.log('Panel de transparencia actualizado');
         
     } catch (err) {
-        console.error('Error actualizando panel de transparencia:', err);
+        console.error('Error en panel de transparencia:', err);
     }
 }
 
@@ -372,55 +471,55 @@ async function updateTransparencyPanel() {
 // FUNCIONES UTILITARIAS
 // ========================
 
-function generateMockTxHash() {
-    return Array.from({length: 88}, () => 
-        Math.random().toString(36).charAt(2)
-    ).join('').slice(0, 88);
-}
-
 function generateTimeAgo() {
     const times = [
         'Hace 2 minutos',
         'Hace 5 minutos',
         'Hace 10 minutos',
         'Hace 30 minutos',
-        'Hace 1 hora',
-        'Hace 2 horas'
+        'Hace 1 hora'
     ];
     return times[Math.floor(Math.random() * times.length)];
 }
 
-// ========================
-// VALIDACIÓN DE DIRECCIONES
-// ========================
-
 function isValidSolanaAddress(address) {
     try {
-        const decoded = bs58.decode(address);
-        return decoded.length === 32;
+        if (typeof bs58 !== 'undefined') {
+            const decoded = bs58.decode(address);
+            return decoded.length === 32;
+        }
+        return address.length === 44; // Base58 típico
     } catch {
         return false;
     }
 }
 
 // ========================
-// MANEJO DE ERRORES Y SEGURIDAD
+// LOGS Y DEBUGGING
+// ========================
+
+console.log('╔════════════════════════════════════════════════════════╗');
+console.log('║         LCOINSWAP dApp - DEVNET TESTING MODE          ║');
+console.log('╠════════════════════════════════════════════════════════╣');
+console.log(`║ Red: ${CURRENT_NETWORK.toUpperCase().padEnd(50)} ║`);
+console.log(`║ RPC: ${RPC_ENDPOINT.slice(0, 45).padEnd(50)} ║`);
+console.log(`║ LCOIN Mint: ${TOKENS.LCOIN.slice(0, 40).padEnd(50)} ║`);
+console.log('║                                                        ║');
+console.log('║ API Integradas:                                        ║');
+console.log('║ ✓ CoinGecko (Precios en vivo)                         ║');
+console.log('║ ✓ Jupiter (Cotizaciones de swaps)                     ║');
+console.log('║ ✓ Solana Web3.js (Transacciones)                      ║');
+console.log('║ ✓ Phantom Wallet (Conexión billetera)                 ║');
+console.log('╚════════════════════════════════════════════════════════╝');
+
+// ========================
+// MANEJO DE ERRORES GLOBAL
 // ========================
 
 window.addEventListener('error', (event) => {
     console.error('Error global:', event.error);
-    // No mostrar detalles de error al usuario en producción
 });
 
-// Prevenir acciones no autorizadas
-document.addEventListener('contextmenu', (e) => {
-    // Permitir clic derecho, solo log para seguridad
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Promesa rechazada:', event.reason);
 });
-
-// ========================
-// INFORMACIÓN PARA DESARROLLO
-// ========================
-
-console.log('LCOINSWAP dApp cargado correctamente');
-console.log('Tokens soportados:', Object.keys(TOKENS));
-console.log('Red: Solana Mainnet');
