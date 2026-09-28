@@ -3,32 +3,32 @@
 // Soporta: Phantom, Solflare, Coinbase Wallet, Trust Wallet
 // ============================================
 
-const WALLET_PROVIDERS = {
-    PHANTOM: {
-        name: 'Phantom',
-        icon: '👻',
-        detect: () => window.phantom?.solana,
-        getProvider: () => window.phantom?.solana
-    },
-    SOLFLARE: {
-        name: 'Solflare',
-        icon: '🌟',
-        detect: () => window.solflare,
-        getProvider: () => window.solflare
-    },
-    COINBASE: {
-        name: 'Coinbase Wallet',
-        icon: '🔵',
-        detect: () => window.coinbaseWallet,
-        getProvider: () => window.coinbaseWallet
-    },
-    TRUST_WALLET: {
-        name: 'Trust Wallet',
-        icon: '🛡️',
-        detect: () => window.trustwallet?.solana || (window.solana?.isTrustWallet),
-        getProvider: () => window.trustwallet?.solana || window.solana
+function getGlobalWalletProvider() {
+    const candidates = [];
+
+    if (window.phantom?.solana) candidates.push({ id: 'PHANTOM', provider: window.phantom.solana, name: 'Phantom', icon: '👻' });
+    if (window.solflare) candidates.push({ id: 'SOLFLARE', provider: window.solflare, name: 'Solflare', icon: '🌟' });
+    if (window.coinbaseWallet?.provider) candidates.push({ id: 'COINBASE', provider: window.coinbaseWallet.provider, name: 'Coinbase Wallet', icon: '🔵' });
+    if (window.coinbaseWallet?.solana) candidates.push({ id: 'COINBASE', provider: window.coinbaseWallet.solana, name: 'Coinbase Wallet', icon: '🔵' });
+    if (window.trustwallet?.solana) candidates.push({ id: 'TRUST_WALLET', provider: window.trustwallet.solana, name: 'Trust Wallet', icon: '🛡️' });
+    if (window.solana && (window.solana.isPhantom || window.solana.isTrustWallet || window.solana.isCoinbaseWallet || window.solana.isSolflare)) {
+        const name = window.solana.isPhantom ? 'Phantom' : window.solana.isTrustWallet ? 'Trust Wallet' : window.solana.isCoinbaseWallet ? 'Coinbase Wallet' : 'Solflare';
+        const icon = window.solana.isPhantom ? '👻' : window.solana.isTrustWallet ? '🛡️' : window.solana.isCoinbaseWallet ? '🔵' : '🌟';
+        candidates.push({ id: name.toUpperCase().replace(/\s+/g, '_'), provider: window.solana, name, icon });
     }
-};
+
+    const unique = [];
+    const seen = new Set();
+    candidates.forEach(candidate => {
+        const key = `${candidate.id}:${candidate.name}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(candidate);
+        }
+    });
+
+    return unique;
+}
 
 class WalletManager {
     constructor() {
@@ -40,45 +40,44 @@ class WalletManager {
         this.listeners = [];
     }
 
-    /**
-     * Detecta wallets disponibles
-     */
     getAvailableWallets() {
-        const available = [];
-        for (const [key, wallet] of Object.entries(WALLET_PROVIDERS)) {
-            if (wallet.detect()) {
-                available.push({
-                    id: key,
-                    name: wallet.name,
-                    icon: wallet.icon
-                });
-            }
-        }
-        return available;
+        return getGlobalWalletProvider().map(wallet => ({
+            id: wallet.id,
+            name: wallet.name,
+            icon: wallet.icon,
+            provider: wallet.provider
+        }));
     }
 
-    /**
-     * Conecta a una wallet específica
-     */
     async connect(walletId) {
-        const wallet = WALLET_PROVIDERS[walletId];
-        if (!wallet) {
-            throw new Error('Wallet not found');
+        const wallets = this.getAvailableWallets();
+        const matched = wallets.find(item => item.id === walletId);
+
+        if (!matched || !matched.provider) {
+            throw new Error('Wallet not detected');
         }
 
-        const provider = wallet.getProvider();
-        if (!provider) {
-            throw new Error(`${wallet.name} not detected`);
-        }
+        const provider = matched.provider;
 
         try {
-            const response = await provider.connect();
-            this.publicKey = response.publicKey;
+            let response = null;
+            if (provider.connect) {
+                response = await provider.connect();
+            } else if (provider.request) {
+                const result = await provider.request({ method: 'connect' });
+                response = { publicKey: result?.publicKey || result?.publicKey?.toString ? new solanaWeb3.PublicKey(result.publicKey) : null };
+            }
+
+            const publicKey = response?.publicKey || provider.publicKey || provider._publicKey;
+            if (!publicKey) {
+                throw new Error('Wallet connected but no public key was returned.');
+            }
+
+            this.publicKey = publicKey;
             this.connected = true;
             this.provider = provider;
-            this.providerName = wallet.name;
+            this.providerName = matched.name;
             this.shortAddress = this.publicKey.toBase58().slice(0, 6) + '...' + this.publicKey.toBase58().slice(-4);
-            
             this.notifyListeners('connected');
             return {
                 publicKey: this.publicKey,
@@ -86,21 +85,23 @@ class WalletManager {
                 provider: this.providerName
             };
         } catch (error) {
+            this.connected = false;
+            this.publicKey = null;
+            this.provider = null;
+            this.providerName = null;
             throw error;
         }
     }
 
-    /**
-     * Desconecta la wallet actual
-     */
     async disconnect() {
-        if (this.provider && this.provider.disconnect) {
+        if (this.provider && typeof this.provider.disconnect === 'function') {
             try {
                 await this.provider.disconnect();
-            } catch (e) {
-                console.warn('Error desconectando:', e);
+            } catch (error) {
+                console.warn('Wallet disconnect warning:', error);
             }
         }
+
         this.connected = false;
         this.publicKey = null;
         this.shortAddress = '';
@@ -109,61 +110,37 @@ class WalletManager {
         this.notifyListeners('disconnected');
     }
 
-    /**
-     * Firma una transacción
-     */
     async signTransaction(transaction) {
-        if (!this.provider) {
-            throw new Error('No wallet connected');
+        if (!this.provider) throw new Error('No wallet connected');
+        if (typeof this.provider.signTransaction === 'function') {
+            return await this.provider.signTransaction(transaction);
         }
-        return await this.provider.signTransaction(transaction);
+        if (typeof this.provider.signTransaction === 'function' && transaction) {
+            return await this.provider.signTransaction(transaction);
+        }
+        throw new Error('This wallet does not support transaction signing.');
     }
 
-    /**
-     * Firma múltiples transacciones
-     */
-    async signAllTransactions(transactions) {
-        if (!this.provider) {
-            throw new Error('No wallet connected');
-        }
-        if (typeof this.provider.signAllTransactions === 'function') {
-            return await this.provider.signAllTransactions(transactions);
-        }
-        return await Promise.all(transactions.map(tx => this.signTransaction(tx)));
-    }
-
-    /**
-     * Agrega listener para cambios de estado
-     */
     onConnectionChange(callback) {
         this.listeners.push(callback);
     }
 
     notifyListeners(event) {
-        this.listeners.forEach(cb => cb(event, this));
+        this.listeners.forEach(callback => callback(event, this));
     }
 
-    /**
-     * Verifica si está conectado
-     */
     isConnected() {
-        return this.connected && this.publicKey !== null;
+        return this.connected && !!this.publicKey;
     }
 
-    /**
-     * Obtiene la dirección pública
-     */
     getPublicKey() {
         return this.publicKey;
     }
 
-    /**
-     * Obtiene el nombre del proveedor
-     */
     getProviderName() {
         return this.providerName;
     }
 }
 
-// Instancia global del gestor de wallets
 const walletManager = new WalletManager();
+
