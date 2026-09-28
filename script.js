@@ -467,4 +467,4 @@ if (typeof solanaWeb3 === 'undefined') {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'x-api-key': JUPIT
+                            'x-api-key': jup_429777a5420fdbf3e3f1ab17fc1ce95b41ee1344fc90309e487ea27661532b47
