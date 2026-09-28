@@ -2,43 +2,30 @@
 // LCOINSWAP - LÓGICA PRINCIPAL
 // ============================================
 
-// ============================================
-// 1. CONFIGURACIÓN
-// ============================================
-const RPC_ENDPOINT = 'https://solana-rpc.publicnode.com';
-const LCOIN_MINT = 'BFUu1ZkJRHLXw5QVSugjhegxEtnWJUMfkpS6rWX5pump';
-const TREASURY_WALLET = '5qqTJ4t82byrugsep67v728K6fYnEmun5SmWcTDaohji';
-const SPREAD_PERCENT = 0.25;
-const DAILY_LIMIT_LCOIN = 5000000;
-
-const TICKER_TOKENS = [
-    { symbol: 'LCOIN', mint: LCOIN_MINT },
-    { symbol: 'SOL', mint: 'So11111111111111111111111111111111111111112' },
-    { symbol: 'USDT', mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB' },
-    { symbol: 'USDC', mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' },
-    { symbol: 'PUMP', mint: 'pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn' },
-    { symbol: 'JUP', mint: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN' }
-];
+console.log('=== LCOINSWAP iniciando ===');
+console.log('1. Script cargado correctamente');
 
 // ============================================
-// 2. FAQ ACORDEÓN (independiente de Solana)
+// FUNCIONES GLOBALES (definidas primero, sin dependencias)
 // ============================================
-function toggleFAQ(button) {
+window.toggleFAQ = function(button) {
+    console.log('toggleFAQ llamado');
     const answer = button.nextElementSibling;
     const icon = button.querySelector('.faq-icon');
+    if (!answer) {
+        console.error('No se encontró .faq-answer');
+        return;
+    }
     if (answer.style.display === 'none' || answer.style.display === '') {
         answer.style.display = 'block';
-        icon.textContent = '−';
+        if (icon) icon.textContent = '−';
     } else {
         answer.style.display = 'none';
-        icon.textContent = '+';
+        if (icon) icon.textContent = '+';
     }
-}
+};
 
-// ============================================
-// 3. SISTEMA DE TOASTS (independiente de Solana)
-// ============================================
-function showToast(type, message, duration = 5000) {
+window.showToast = function(type, message, duration = 5000) {
     const container = document.getElementById('toast-container');
     if (!container) return null;
     const toast = document.createElement('div');
@@ -53,14 +40,19 @@ function showToast(type, message, duration = 5000) {
         }, duration);
     }
     return toast;
-}
+};
+
+console.log('2. Funciones globales definidas (toggleFAQ, showToast)');
 
 // ============================================
-// 4. FONDO DE UNIVERSO (ESTRELLAS Y COMETAS)
+// FONDO DE UNIVERSO (independiente)
 // ============================================
 (function(){
     const canvas = document.getElementById('bubbles-canvas');
-    if (!canvas) return;
+    if (!canvas) {
+        console.warn('Canvas no encontrado');
+        return;
+    }
     const ctx = canvas.getContext('2d');
     let width, height;
 
@@ -152,339 +144,327 @@ function showToast(type, message, duration = 5000) {
 
     function animate() { ctx.clearRect(0, 0, width, height); drawStars(); drawComets(); requestAnimationFrame(animate); }
     animate();
+    console.log('3. Fondo animado cargado');
 })();
 
 // ============================================
-// 5. CÓDIGO DEPENDIENTE DE SOLANA
-//    Envuelto en try/catch para que, si la librería falla,
-//    el resto de la página siga funcionando.
+// VERIFICACIÓN DE DEPENDENCIAS
 // ============================================
-try {
-    // Verificar que la librería esté cargada
-    if (typeof solanaWeb3 === 'undefined') {
-        throw new Error('La librería @solana/web3.js no se cargó correctamente.');
-    }
+console.log('4. Verificando dependencias...');
 
-    // --- ESTADO GLOBAL ---
-    const wallet = {
-        connected: false,
-        publicKey: null,
-        shortAddress: '',
-        provider: null
-    };
+if (typeof solanaWeb3 === 'undefined') {
+    console.error('❌ solanaWeb3 NO está definida. La librería de Solana no se cargó.');
+    console.error('   Verifica que el <script> de @solana/web3.js esté en el HTML.');
+} else {
+    console.log('✅ solanaWeb3 cargada correctamente');
+}
 
-    const connection = new solanaWeb3.Connection(RPC_ENDPOINT, 'confirmed');
+if (typeof JUPITER_API_KEY === 'undefined') {
+    console.error('❌ JUPITER_API_KEY NO está definida. Falta config.js o no se subió.');
+} else {
+    console.log('✅ JUPITER_API_KEY disponible');
+}
 
-    const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-    const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+if (typeof SOLSCAN_API_KEY === 'undefined') {
+    console.warn('⚠️ SOLSCAN_API_KEY no definida (opcional para el panel de transparencia)');
+} else {
+    console.log('✅ SOLSCAN_API_KEY disponible');
+}
 
-    // --- REFERENCIAS DOM ---
-    const connectBtn = document.getElementById('connect-wallet-btn');
-    const walletAddressSpan = document.getElementById('wallet-address');
-    const swapBtn = document.getElementById('swap-btn');
-    const swapNote = document.getElementById('swap-note');
-    const tokenSelect = document.getElementById('token-select');
-    const customMintGroup = document.getElementById('custom-mint-group');
-    const amountIn = document.getElementById('amount-in');
-    const lcoinOut = document.getElementById('lcoin-out');
-    const feeSpread = document.getElementById('fee-spread');
+// ============================================
+// CÓDIGO PRINCIPAL (solo si solanaWeb3 existe)
+// ============================================
+if (typeof solanaWeb3 === 'undefined') {
+    console.error('5. No se puede continuar sin solanaWeb3. El FAQ sigue funcionando.');
+} else {
+    try {
+        console.log('5. Iniciando módulo de Solana...');
 
-    // ============================================
-    // CONEXIÓN DE WALLET
-    // ============================================
-    async function connectWallet() {
-        const provider = window.phantom?.solana || window.solana || window.solflare;
-        if (!provider) {
-            showToast('error', 'No wallet detected. Please install Phantom or Solflare.');
-            return;
-        }
-        try {
-            const response = await provider.connect();
-            wallet.publicKey = response.publicKey;
-            wallet.connected = true;
-            wallet.provider = provider;
-            wallet.shortAddress = wallet.publicKey.toBase58().slice(0,6) + '...' + wallet.publicKey.toBase58().slice(-4);
-            updateUI();
-            showToast('success', 'Wallet connected.');
-        } catch (err) {
-            showToast('error', 'Connection cancelled.');
-        }
-    }
+        const RPC_ENDPOINT = 'https://solana-rpc.publicnode.com';
+        const LCOIN_MINT = 'BFUu1ZkJRHLXw5QVSugjhegxEtnWJUMfkpS6rWX5pump';
+        const TREASURY_WALLET = '5qqTJ4t82byrugsep67v728K6fYnEmun5SmWcTDaohji';
+        const SPREAD_PERCENT = 0.25;
+        const DAILY_LIMIT_LCOIN = 5000000;
 
-    async function disconnectWallet() {
-        if (wallet.provider && wallet.provider.disconnect) {
-            await wallet.provider.disconnect();
-        }
-        wallet.connected = false;
-        wallet.publicKey = null;
-        wallet.shortAddress = '';
-        wallet.provider = null;
-        updateUI();
-        showToast('info', 'Wallet disconnected.');
-    }
+        const TICKER_TOKENS = [
+            { symbol: 'LCOIN', mint: LCOIN_MINT },
+            { symbol: 'SOL', mint: 'So11111111111111111111111111111111111111112' },
+            { symbol: 'USDT', mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB' },
+            { symbol: 'USDC', mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' },
+            { symbol: 'PUMP', mint: 'pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn' },
+            { symbol: 'JUP', mint: 'JUPyiwrYJFskUPiHA7hkeR8VUtAeFoSYbKedZNsDvCN' }
+        ];
 
-    function updateUI() {
-        if (wallet.connected) {
-            walletAddressSpan.textContent = wallet.shortAddress;
-            connectBtn.textContent = 'Connected';
-            connectBtn.classList.add('connected');
-            swapBtn.disabled = false;
-            swapBtn.textContent = 'Swap to LCOIN';
-            swapNote.style.display = 'none';
-        } else {
-            walletAddressSpan.textContent = '';
-            connectBtn.textContent = 'Connect Motor';
-            connectBtn.classList.remove('connected');
-            swapBtn.disabled = true;
-            swapBtn.textContent = 'Connect Wallet to Swap';
-            swapNote.style.display = 'block';
-        }
-    }
+        const wallet = {
+            connected: false,
+            publicKey: null,
+            shortAddress: '',
+            provider: null
+        };
 
-    if (connectBtn) {
-        connectBtn.addEventListener('click', () => {
-            if (wallet.connected) disconnectWallet();
-            else connectWallet();
-        });
-    }
+        const connection = new solanaWeb3.Connection(RPC_ENDPOINT, 'confirmed');
+        const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+        const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 
-    // ============================================
-    // CINTILLO DE COTIZACIONES
-    // ============================================
-    async function fetchTokenPrices(mints) {
-        try {
-            const ids = mints.join(',');
-            const res = await fetch(`https://api.jup.ag/price/v3?ids=${ids}`, {
-                headers: { 'x-api-key': JUPITER_API_KEY }
-            });
-            if (!res.ok) return null;
-            return await res.json();
-        } catch (e) { return null; }
-    }
+        const connectBtn = document.getElementById('connect-wallet-btn');
+        const walletAddressSpan = document.getElementById('wallet-address');
+        const swapBtn = document.getElementById('swap-btn');
+        const swapNote = document.getElementById('swap-note');
+        const tokenSelect = document.getElementById('token-select');
+        const customMintGroup = document.getElementById('custom-mint-group');
+        const amountIn = document.getElementById('amount-in');
+        const lcoinOut = document.getElementById('lcoin-out');
+        const feeSpread = document.getElementById('fee-spread');
 
-    async function updateTicker() {
-        const track = document.getElementById('ticker-track');
-        if (!track) return;
-        const mints = TICKER_TOKENS.map(t => t.mint);
-        const prices = await fetchTokenPrices(mints);
-        let html = '';
-        for (let repeat = 0; repeat < 2; repeat++) {
-            for (const token of TICKER_TOKENS) {
-                let price = '—';
-                if (prices && prices[token.mint]) {
-                    price = prices[token.mint].usdPrice || 0;
-                }
-                const priceFormatted = typeof price === 'number'
-                    ? (price < 0.01 ? price.toFixed(8) : price.toFixed(2))
-                    : price;
-                html += `<span class="ticker-item"><span class="symbol">${token.symbol}</span><span class="price">$${priceFormatted}</span></span>`;
+        console.log('6. Elementos del DOM referenciados');
+
+        // ---- Conexión de wallet ----
+        async function connectWallet() {
+            const provider = window.phantom?.solana || window.solana || window.solflare;
+            if (!provider) {
+                showToast('error', 'No wallet detected. Install Phantom or Solflare.');
+                return;
+            }
+            try {
+                const response = await provider.connect();
+                wallet.publicKey = response.publicKey;
+                wallet.connected = true;
+                wallet.provider = provider;
+                wallet.shortAddress = wallet.publicKey.toBase58().slice(0,6) + '...' + wallet.publicKey.toBase58().slice(-4);
+                updateUI();
+                showToast('success', 'Wallet connected.');
+            } catch (err) {
+                showToast('error', 'Connection cancelled.');
             }
         }
-        track.innerHTML = html;
-    }
-    setInterval(updateTicker, 180000);
-    updateTicker();
 
-    // ============================================
-    // CALCULADORA
-    // ============================================
-    if (tokenSelect) {
-        tokenSelect.addEventListener('change', () => {
-            if (tokenSelect.value === 'OTHER') customMintGroup.classList.remove('hidden');
-            else customMintGroup.classList.add('hidden');
-            recalculate();
-        });
-    }
-    if (amountIn) {
-        amountIn.addEventListener('input', recalculate);
-    }
-
-    async function getJupiterQuote(inputMint, amount, outputMint) {
-        try {
-            const inputDecimals = inputMint === 'So11111111111111111111111111111111111111112' ? 9 : 6;
-            const amountLamports = Math.floor(amount * Math.pow(10, inputDecimals));
-            const url = `https://api.jup.ag/swap/v1/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountLamports}&slippageBps=100`;
-            const res = await fetch(url, {
-                headers: { 'x-api-key': JUPITER_API_KEY }
-            });
-            if (!res.ok) return null;
-            return await res.json();
-        } catch (e) { return null; }
-    }
-
-    async function recalculate() {
-        const amount = parseFloat(amountIn.value);
-        if (!amount || amount <= 0) {
-            lcoinOut.textContent = '—';
-            feeSpread.textContent = '—';
-            return;
+        async function disconnectWallet() {
+            if (wallet.provider && wallet.provider.disconnect) {
+                await wallet.provider.disconnect();
+            }
+            wallet.connected = false;
+            wallet.publicKey = null;
+            wallet.shortAddress = '';
+            wallet.provider = null;
+            updateUI();
+            showToast('info', 'Wallet disconnected.');
         }
-        const selectedToken = tokenSelect.value;
-        const isCustom = selectedToken === 'OTHER';
-        const inputMint = isCustom ? document.getElementById('custom-mint').value.trim() : selectedToken;
-        if (!inputMint || inputMint.length < 32) return;
 
-        lcoinOut.textContent = 'Calculating...';
-        feeSpread.textContent = '...';
+        function updateUI() {
+            if (wallet.connected) {
+                walletAddressSpan.textContent = wallet.shortAddress;
+                connectBtn.textContent = 'Connected';
+                connectBtn.classList.add('connected');
+                swapBtn.disabled = false;
+                swapBtn.textContent = 'Swap to LCOIN';
+                swapNote.style.display = 'none';
+            } else {
+                walletAddressSpan.textContent = '';
+                connectBtn.textContent = 'Connect Motor';
+                connectBtn.classList.remove('connected');
+                swapBtn.disabled = true;
+                swapBtn.textContent = 'Connect Wallet to Swap';
+                swapNote.style.display = 'block';
+            }
+        }
 
-        try {
-            const quote = await getJupiterQuote(inputMint, amount, LCOIN_MINT);
-            if (!quote) {
-                lcoinOut.textContent = 'Not available';
+        if (connectBtn) {
+            connectBtn.addEventListener('click', () => {
+                if (wallet.connected) disconnectWallet();
+                else connectWallet();
+            });
+        }
+
+        // ---- Ticker ----
+        async function fetchTokenPrices(mints) {
+            if (typeof JUPITER_API_KEY === 'undefined') return null;
+            try {
+                const ids = mints.join(',');
+                const res = await fetch(`https://api.jup.ag/price/v3?ids=${ids}`, {
+                    headers: { 'x-api-key': JUPITER_API_KEY }
+                });
+                if (!res.ok) return null;
+                return await res.json();
+            } catch (e) { return null; }
+        }
+
+        async function updateTicker() {
+            const track = document.getElementById('ticker-track');
+            if (!track) return;
+            const mints = TICKER_TOKENS.map(t => t.mint);
+            const prices = await fetchTokenPrices(mints);
+            let html = '';
+            for (let repeat = 0; repeat < 2; repeat++) {
+                for (const token of TICKER_TOKENS) {
+                    let price = '—';
+                    if (prices && prices[token.mint]) {
+                        price = prices[token.mint].usdPrice || 0;
+                    }
+                    const priceFormatted = typeof price === 'number'
+                        ? (price < 0.01 ? price.toFixed(8) : price.toFixed(2))
+                        : price;
+                    html += `<span class="ticker-item"><span class="symbol">${token.symbol}</span><span class="price">$${priceFormatted}</span></span>`;
+                }
+            }
+            track.innerHTML = html;
+        }
+        setInterval(updateTicker, 180000);
+        updateTicker();
+
+        // ---- Calculadora ----
+        if (tokenSelect) {
+            tokenSelect.addEventListener('change', () => {
+                if (tokenSelect.value === 'OTHER') customMintGroup.classList.remove('hidden');
+                else customMintGroup.classList.add('hidden');
+                recalculate();
+            });
+        }
+        if (amountIn) {
+            amountIn.addEventListener('input', recalculate);
+        }
+
+        async function getJupiterQuote(inputMint, amount, outputMint) {
+            if (typeof JUPITER_API_KEY === 'undefined') return null;
+            try {
+                const inputDecimals = inputMint === 'So11111111111111111111111111111111111111112' ? 9 : 6;
+                const amountLamports = Math.floor(amount * Math.pow(10, inputDecimals));
+                const url = `https://api.jup.ag/swap/v1/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountLamports}&slippageBps=100`;
+                const res = await fetch(url, {
+                    headers: { 'x-api-key': JUPITER_API_KEY }
+                });
+                if (!res.ok) return null;
+                return await res.json();
+            } catch (e) { return null; }
+        }
+
+        async function recalculate() {
+            const amount = parseFloat(amountIn.value);
+            if (!amount || amount <= 0) {
+                lcoinOut.textContent = '—';
                 feeSpread.textContent = '—';
                 return;
             }
-            const outAmountRaw = parseInt(quote.outAmount);
-            const lcoinBruto = outAmountRaw / Math.pow(10, 6);
-            const lcoinNeto = lcoinBruto * (1 - SPREAD_PERCENT / 100);
-            const spreadAmount = lcoinBruto - lcoinNeto;
-            lcoinOut.textContent = lcoinNeto.toLocaleString('en-US', { maximumFractionDigits: 2 });
-            feeSpread.textContent = spreadAmount.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' LCOIN';
-        } catch (e) {
-            lcoinOut.textContent = 'Error';
-            feeSpread.textContent = '—';
-        }
-    }
-
-    // ============================================
-    // HELPERS SPL
-    // ============================================
-    function getAssociatedTokenAddress(mint, owner) {
-        const [address] = solanaWeb3.PublicKey.findProgramAddressSync(
-            [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-            ASSOCIATED_TOKEN_PROGRAM_ID
-        );
-        return address;
-    }
-
-    function createTransferInstruction(source, destination, authority, amount) {
-        const data = Buffer.alloc(9);
-        data.writeUInt8(3, 0);
-        data.writeBigUInt64LE(BigInt(amount), 1);
-        return new solanaWeb3.TransactionInstruction({
-            programId: TOKEN_PROGRAM_ID,
-            keys: [
-                { pubkey: source, isSigner: false, isWritable: true },
-                { pubkey: destination, isSigner: false, isWritable: true },
-                { pubkey: authority, isSigner: true, isWritable: false }
-            ],
-            data
-        });
-    }
-
-    function deserializeInstruction(ix) {
-        return new solanaWeb3.TransactionInstruction({
-            programId: new solanaWeb3.PublicKey(ix.programId),
-            keys: ix.accounts.map(acc => ({
-                pubkey: new solanaWeb3.PublicKey(acc.pubkey),
-                isSigner: acc.isSigner,
-                isWritable: acc.isWritable
-            })),
-            data: Buffer.from(ix.data, 'base64')
-        });
-    }
-
-    // ============================================
-    // LÍMITE DIARIO
-    // ============================================
-    function getDailyPurchases(walletAddress) {
-        const today = new Date().toDateString();
-        const key = `lcoin_swaps_${walletAddress}_${today}`;
-        return parseFloat(localStorage.getItem(key) || '0');
-    }
-
-    function addDailyPurchase(walletAddress, amount) {
-        const today = new Date().toDateString();
-        const key = `lcoin_swaps_${walletAddress}_${today}`;
-        localStorage.setItem(key, (getDailyPurchases(walletAddress) + amount).toString());
-    }
-
-    // ============================================
-    // EJECUCIÓN DEL SWAP
-    // ============================================
-    if (swapBtn) {
-        swapBtn.addEventListener('click', async () => {
-            if (!wallet.connected) {
-                showToast('error', 'Connect your wallet first.');
-                return;
-            }
-
-            const amount = parseFloat(amountIn.value);
-            if (!amount || amount <= 0) {
-                showToast('error', 'Enter a valid amount.');
-                return;
-            }
-
             const selectedToken = tokenSelect.value;
             const isCustom = selectedToken === 'OTHER';
             const inputMint = isCustom ? document.getElementById('custom-mint').value.trim() : selectedToken;
-            if (!inputMint || inputMint.length < 32) {
-                showToast('error', 'Invalid token.');
-                return;
-            }
+            if (!inputMint || inputMint.length < 32) return;
 
-            const dailyLimit = getDailyPurchases(wallet.publicKey.toBase58());
-            if (dailyLimit >= DAILY_LIMIT_LCOIN) {
-                showToast('error', 'Daily limit of 5M LCOIN reached.');
-                return;
-            }
-
-            const loadingToast = showToast('loading', 'Preparing swap...');
+            lcoinOut.textContent = 'Calculating...';
+            feeSpread.textContent = '...';
 
             try {
-                // 1. Cotización
                 const quote = await getJupiterQuote(inputMint, amount, LCOIN_MINT);
                 if (!quote) {
-                    loadingToast.remove();
-                    showToast('error', 'Could not get a quote.');
+                    lcoinOut.textContent = 'Not available';
+                    feeSpread.textContent = '—';
                     return;
                 }
-
                 const outAmountRaw = parseInt(quote.outAmount);
-                const spreadRaw = Math.floor(outAmountRaw * (SPREAD_PERCENT / 100));
-                const totalLcoin = outAmountRaw / Math.pow(10, 6);
+                const lcoinBruto = outAmountRaw / Math.pow(10, 6);
+                const lcoinNeto = lcoinBruto * (1 - SPREAD_PERCENT / 100);
+                const spreadAmount = lcoinBruto - lcoinNeto;
+                lcoinOut.textContent = lcoinNeto.toLocaleString('en-US', { maximumFractionDigits: 2 });
+                feeSpread.textContent = spreadAmount.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' LCOIN';
+            } catch (e) {
+                lcoinOut.textContent = 'Error';
+                feeSpread.textContent = '—';
+            }
+        }
 
-                if (dailyLimit + totalLcoin > DAILY_LIMIT_LCOIN) {
-                    loadingToast.remove();
-                    showToast('error', 'This swap would exceed the daily limit of 5M LCOIN.');
+        // ---- Helpers SPL ----
+        function getAssociatedTokenAddress(mint, owner) {
+            const [address] = solanaWeb3.PublicKey.findProgramAddressSync(
+                [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+                ASSOCIATED_TOKEN_PROGRAM_ID
+            );
+            return address;
+        }
+
+        function createTransferInstruction(source, destination, authority, amount) {
+            const data = Buffer.alloc(9);
+            data.writeUInt8(3, 0);
+            data.writeBigUInt64LE(BigInt(amount), 1);
+            return new solanaWeb3.TransactionInstruction({
+                programId: TOKEN_PROGRAM_ID,
+                keys: [
+                    { pubkey: source, isSigner: false, isWritable: true },
+                    { pubkey: destination, isSigner: false, isWritable: true },
+                    { pubkey: authority, isSigner: true, isWritable: false }
+                ],
+                data
+            });
+        }
+
+        function deserializeInstruction(ix) {
+            return new solanaWeb3.TransactionInstruction({
+                programId: new solanaWeb3.PublicKey(ix.programId),
+                keys: ix.accounts.map(acc => ({
+                    pubkey: new solanaWeb3.PublicKey(acc.pubkey),
+                    isSigner: acc.isSigner,
+                    isWritable: acc.isWritable
+                })),
+                data: Buffer.from(ix.data, 'base64')
+            });
+        }
+
+        // ---- Límite diario ----
+        function getDailyPurchases(walletAddress) {
+            const today = new Date().toDateString();
+            const key = `lcoin_swaps_${walletAddress}_${today}`;
+            return parseFloat(localStorage.getItem(key) || '0');
+        }
+
+        function addDailyPurchase(walletAddress, amount) {
+            const today = new Date().toDateString();
+            const key = `lcoin_swaps_${walletAddress}_${today}`;
+            localStorage.setItem(key, (getDailyPurchases(walletAddress) + amount).toString());
+        }
+
+        // ---- Swap ----
+        if (swapBtn) {
+            swapBtn.addEventListener('click', async () => {
+                if (!wallet.connected) {
+                    showToast('error', 'Connect your wallet first.');
                     return;
                 }
-
-                // 2. Instrucciones de swap
-                loadingToast.innerHTML = '<span class="toast-icon">⏳</span>Building transaction...';
-                const swapRes = await fetch('https://api.jup.ag/swap/v1/swap-instructions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': JUPITER_API_KEY
-                    },
-                    body: JSON.stringify({
-                        quoteResponse: quote,
-                        userPublicKey: wallet.publicKey.toString(),
-                        wrapAndUnwrapSol: true,
-                        dynamicComputeUnitLimit: true,
-                        prioritizationFeeLamports: 'auto'
-                    })
-                });
-
-                if (!swapRes.ok) {
-                    loadingToast.remove();
-                    showToast('error', 'Could not build swap transaction.');
+                const amount = parseFloat(amountIn.value);
+                if (!amount || amount <= 0) {
+                    showToast('error', 'Enter a valid amount.');
                     return;
                 }
-
-                const swapInstructions = await swapRes.json();
-                const instructions = [];
-
-                if (swapInstructions.computeBudgetInstructions) {
-                    swapInstructions.computeBudgetInstructions.forEach(ix => instructions.push(deserializeInstruction(ix)));
+                const selectedToken = tokenSelect.value;
+                const isCustom = selectedToken === 'OTHER';
+                const inputMint = isCustom ? document.getElementById('custom-mint').value.trim() : selectedToken;
+                if (!inputMint || inputMint.length < 32) {
+                    showToast('error', 'Invalid token.');
+                    return;
                 }
-                if (swapInstructions.setupInstructions) {
-                    swapInstructions.setupInstructions.forEach(ix => instructions.push(deserializeInstruction(ix)));
+                const dailyLimit = getDailyPurchases(wallet.publicKey.toBase58());
+                if (dailyLimit >= DAILY_LIMIT_LCOIN) {
+                    showToast('error', 'Daily limit reached.');
+                    return;
                 }
-                instructions.push(deserializeInstruction(swapInstructions.swapInstruction));
+                const loadingToast = showToast('loading', 'Preparing swap...');
+                try {
+                    const quote = await getJupiterQuote(inputMint, amount, LCOIN_MINT);
+                    if (!quote) {
+                        loadingToast.remove();
+                        showToast('error', 'Could not get a quote.');
+                        return;
+                    }
+                    const outAmountRaw = parseInt(quote.outAmount);
+                    const spreadRaw = Math.floor(outAmountRaw * (SPREAD_PERCENT / 100));
+                    const totalLcoin = outAmountRaw / Math.pow(10, 6);
 
-                // 3. Spread a tesorería
-                if (spreadRaw > 0) {
-                    const userLcoinAta = getAssociatedTokenAddress(new solanaWeb3.PublicKey(LCOIN_MINT), wallet.publicKey);
-                    const treasuryLcoinAta = getAssociatedTokenAddress(new sol
+                    if (dailyLimit + totalLcoin > DAILY_LIMIT_LCOIN) {
+                        loadingToast.remove();
+                        showToast('error', 'Would exceed daily limit.');
+                        return;
+                    }
+
+                    loadingToast.innerHTML = '<span class="toast-icon">⏳</span>Building transaction...';
+                    const swapRes = await fetch('https://api.jup.ag/swap/v1/swap-instructions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': JUPIT
