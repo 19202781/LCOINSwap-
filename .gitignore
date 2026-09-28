@@ -1,1 +1,5 @@
-config.js
+node_modules/
+.env
+config.local.js
+*.log
+.DS_Store

@@ -159,8 +159,8 @@ if (typeof solanaWeb3 === 'undefined') {
     console.log('✅ solanaWeb3 cargada correctamente');
 }
 
-if (typeof JUPITER_API_KEY === 'undefined') {
-    console.error('❌ JUPITER_API_KEY NO está definida. Falta config.js o no se subió.');
+if (typeof JUPITER_API_KEY === 'undefined' || !JUPITER_API_KEY) {
+    console.error('❌ JUPITER_API_KEY NO está configurada. Falta config.js o está vacía.');
 } else {
     console.log('✅ JUPITER_API_KEY disponible');
 }
@@ -277,7 +277,7 @@ if (typeof solanaWeb3 === 'undefined') {
 
         // ---- Ticker ----
         async function fetchTokenPrices(mints) {
-            if (typeof JUPITER_API_KEY === 'undefined') return null;
+            if (!JUPITER_API_KEY) return null;
             try {
                 const ids = mints.join(',');
                 const res = await fetch(`https://api.jup.ag/price/v3?ids=${ids}`, {
@@ -324,7 +324,7 @@ if (typeof solanaWeb3 === 'undefined') {
         }
 
         async function getJupiterQuote(inputMint, amount, outputMint) {
-            if (typeof JUPITER_API_KEY === 'undefined') return null;
+            if (!JUPITER_API_KEY) return null;
             try {
                 const inputDecimals = inputMint === 'So11111111111111111111111111111111111111112' ? 9 : 6;
                 const amountLamports = Math.floor(amount * Math.pow(10, inputDecimals));
@@ -427,6 +427,10 @@ if (typeof solanaWeb3 === 'undefined') {
                     showToast('error', 'Connect your wallet first.');
                     return;
                 }
+                if (!JUPITER_API_KEY) {
+                    showToast('error', 'Jupiter API key not configured.');
+                    return;
+                }
                 const amount = parseFloat(amountIn.value);
                 if (!amount || amount <= 0) {
                     showToast('error', 'Enter a valid amount.');
@@ -467,4 +471,55 @@ if (typeof solanaWeb3 === 'undefined') {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'x-api-key': jup_429777a5420fdbf3e3f1ab17fc1ce95b41ee1344fc90309e487ea27661532b47
+                            'x-api-key': JUPITER_API_KEY
+                        },
+                        body: JSON.stringify({
+                            quoteResponse: quote,
+                            userPublicKey: wallet.publicKey.toBase58(),
+                            wrapUnwrapSOL: true
+                        })
+                    });
+
+                    if (!swapRes.ok) {
+                        loadingToast.remove();
+                        showToast('error', 'Failed to build swap transaction.');
+                        return;
+                    }
+                    const swapData = await swapRes.json();
+                    const ixList = swapData.swapInstruction ? [swapData.swapInstruction] : [];
+                    if (swapData.setupInstructions) ixList.unshift(...swapData.setupInstructions);
+                    if (swapData.cleanupInstruction) ixList.push(swapData.cleanupInstruction);
+
+                    // Add fee transfer
+                    const feeAccount = new solanaWeb3.PublicKey('FEETvkwp9HZtaRaGxPVKWwWhjKK6Sf5EbyC6K7TnVh2M'); // Placeholder - reemplazar con dirección correcta
+                    const userTokenAccount = getAssociatedTokenAddress(new solanaWeb3.PublicKey(LCOIN_MINT), wallet.publicKey);
+                    const feeTransferIx = createTransferInstruction(userTokenAccount, feeAccount, wallet.publicKey, spreadRaw);
+                    ixList.push(feeTransferIx);
+
+                    const tx = new solanaWeb3.Transaction().add(...ixList.map(ix => typeof ix === 'string' ? deserializeInstruction(JSON.parse(Buffer.from(ix, 'base64').toString())) : ix));
+                    tx.feePayer = wallet.publicKey;
+                    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+                    loadingToast.innerHTML = '<span class="toast-icon">⏳</span>Awaiting wallet signature...';
+                    const signedTx = await wallet.provider.signTransaction(tx);
+                    loadingToast.innerHTML = '<span class="toast-icon">⏳</span>Sending transaction...';
+                    const txId = await connection.sendRawTransaction(signedTx.serialize());
+                    await connection.confirmTransaction(txId);
+
+                    loadingToast.remove();
+                    showToast('success', `Swap successful! TX: ${txId.slice(0, 20)}...`);
+                    addDailyPurchase(wallet.publicKey.toBase58(), totalLcoin);
+                    recalculate();
+                } catch (error) {
+                    loadingToast.remove();
+                    console.error('Swap error:', error);
+                    showToast('error', `Swap failed: ${error.message}`);
+                }
+            });
+        }
+
+        console.log('7. ✅ Módulo de Solana inicializado correctamente');
+    } catch (error) {
+        console.error('Error fatal en módulo de Solana:', error);
+    }
+}
