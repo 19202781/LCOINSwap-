@@ -5,58 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LCOINSWAP | The Engine of LCOIN</title>
     <link rel="stylesheet" href="style.css">
-    
-    <!-- Librería de Solana desde CDN -->
+
     <script src="https://unpkg.com/@solana/web3.js@1.98.4/lib/index.iife.min.js"></script>
 </head>
 <body>
     <canvas id="bubbles-canvas"></canvas>
 
-    <!-- ===== CABECERA ===== -->
     <header class="header">
         <img src="logo.jpg" alt="LCOIN Logo" class="logo">
         <div class="wallet-area">
             <span id="wallet-address" class="wallet-address"></span>
-            <button id="connect-wallet-btn" class="btn btn-connect">Connect Motor</button>
+            <button id="connect-wallet-btn" class="btn btn-connect">Connect Wallet</button>
         </div>
     </header>
 
-    <!-- ===== CINTILLO DE COTIZACIONES ===== -->
     <div class="ticker-bar">
         <div class="ticker-track" id="ticker-track"></div>
     </div>
 
-    <!-- ===== MINI-TUTORIAL ===== -->
     <section class="guide">
         <div class="guide-card">
             <h2>How to Buy LCOIN</h2>
             <div class="steps">
                 <div class="step">
                     <span class="step-number">1</span>
-                    <p><strong>Connect your wallet</strong> – Click "Connect Motor" and choose Phantom, Solflare, or Backpack.</p>
+                    <p><strong>Connect your wallet</strong> – Choose Phantom, Solflare, Coinbase Wallet, or Trust Wallet.</p>
                 </div>
                 <div class="step">
                     <span class="step-number">2</span>
-                    <p><strong>Choose what to swap</strong> – Select SOL, USDT, USDC, PUMP, JUP, or paste the mint address of another token.</p>
+                    <p><strong>Select the token</strong> – Use SOL, USDT, USDC, PUMP, JUP, or paste another mint address.</p>
                 </div>
                 <div class="step">
                     <span class="step-number">3</span>
-                    <p><strong>Enter the amount</strong> – Type how much you want to spend. The calculator shows how many LCOIN you'll receive.</p>
+                    <p><strong>Enter the amount</strong> – The calculator shows how many LCOIN you will receive.</p>
                 </div>
                 <div class="step">
                     <span class="step-number">4</span>
-                    <p><strong>Confirm in your wallet</strong> – Review the network fees in your wallet app and sign the transaction.</p>
+                    <p><strong>Review and sign</strong> – Check slippage, errors, and confirm in your wallet.</p>
                 </div>
             </div>
             <p class="guide-note">✨ LCOIN is still on the Pump.fun bonding curve. Every swap helps fill the curve and move closer to graduation. La tortuga no corre, camina 🐢</p>
         </div>
     </section>
 
-    <!-- ===== CALCULADORA ===== -->
     <main class="swap-container">
         <div class="swap-card">
             <h2>Swap to <span class="accent">LCOIN</span></h2>
-            
+
+            <div id="swap-error-box" class="error-box hidden"></div>
+            <div id="swap-warning-box" class="warning-box hidden"></div>
+
             <div class="input-group">
                 <label for="token-select">You pay with</label>
                 <select id="token-select">
@@ -64,19 +62,37 @@
                     <option value="Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB">USDT</option>
                     <option value="EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v">USDC</option>
                     <option value="pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn">PUMP</option>
-                    <option value="JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN">JUP</option>
+                    <option value="JUPyiwrYJFskUPiHA7hkeR8VUtAeFoSYbKedZNsDvCN">JUP</option>
                     <option value="OTHER">Other (paste mint address)</option>
                 </select>
             </div>
 
             <div id="custom-mint-group" class="input-group hidden">
                 <label for="custom-mint">Token mint address</label>
-                <input type="text" id="custom-mint" placeholder="Paste the token's mint address">
+                <input type="text" id="custom-mint" placeholder="Paste the token mint address">
             </div>
 
             <div class="input-group">
                 <label for="amount-in">Amount to swap</label>
                 <input type="number" id="amount-in" placeholder="0.0" step="any" min="0">
+            </div>
+
+            <div class="slippage-control">
+                <div class="slippage-label">
+                    <span>Slippage tolerance</span>
+                    <span id="slippage-value" class="slippage-value">1.0%</span>
+                </div>
+                <div class="slippage-input-group">
+                    <input id="slippage-input" type="number" min="0.1" max="50" step="0.1" value="1.0">
+                    <span class="slippage-percent">%</span>
+                </div>
+                <div class="slippage-presets">
+                    <button type="button" class="slippage-preset" data-slippage="0.5">0.5%</button>
+                    <button type="button" class="slippage-preset active" data-slippage="1.0">1.0%</button>
+                    <button type="button" class="slippage-preset" data-slippage="2.0">2.0%</button>
+                    <button type="button" class="slippage-preset" data-slippage="5.0">5.0%</button>
+                </div>
+                <div id="slippage-warning" class="slippage-warning">Low slippage is recommended for LCOIN.</div>
             </div>
 
             <div id="result-section" class="result-box">
@@ -90,14 +106,13 @@
                 </div>
             </div>
 
-            <p class="network-note">⚠️ Network fees are calculated and shown by your wallet app at the moment of signing. LCOINSWAP does not calculate or set these fees.</p>
+            <p class="network-note">⚠️ Network fees are set by your wallet app at signing time. LCOINSWAP does not calculate or collect them.</p>
 
             <button id="swap-btn" class="btn btn-swap" disabled>Connect Wallet to Swap</button>
             <p id="swap-note" class="swap-note">You need to connect your wallet first.</p>
         </div>
     </main>
 
-    <!-- ===== FAQ ===== -->
     <section class="faq">
         <h2>Frequently Asked Questions</h2>
         <div class="faq-container">
@@ -107,7 +122,7 @@
                     <span class="faq-icon">+</span>
                 </button>
                 <div class="faq-answer" style="display:none;">
-                    <p>No. LCOINSWAP is a one-way gateway: you can swap other tokens for LCOIN, but not the reverse. Selling LCOIN will only be possible after the token graduates to PumpSwap, where a liquidity pool will exist. Until then, LCOINSWAP is a door to enter, not to exit.</p>
+                    <p>No. LCOINSWAP is a one-way gateway: you can buy LCOIN by swapping other tokens, but not the reverse. Selling will only be possible after graduation to a proper DEX.</p>
                 </div>
             </div>
             <div class="faq-item">
@@ -116,7 +131,7 @@
                     <span class="faq-icon">+</span>
                 </button>
                 <div class="faq-answer" style="display:none;">
-                    <p>You can swap SOL, USDT, USDC, PUMP, and JUP. If you hold another Solana token, select "Other" and paste its mint address to swap it as well.</p>
+                    <p>You can swap SOL, USDT, USDC, PUMP, and JUP. If you hold another Solana token, choose "Other" and paste the mint address.</p>
                 </div>
             </div>
             <div class="faq-item">
@@ -125,7 +140,7 @@
                     <span class="faq-icon">+</span>
                 </button>
                 <div class="faq-answer" style="display:none;">
-                    <p>Your wallet app (Phantom, Solflare, etc.) calculates and shows the network fees at the moment of signing. LCOINSWAP does not calculate, set, or receive these fees.</p>
+                    <p>Your wallet app calculates and shows base network fees when you sign. LCOINSWAP does not set or receive those fees.</p>
                 </div>
             </div>
             <div class="faq-item">
@@ -134,7 +149,7 @@
                     <span class="faq-icon">+</span>
                 </button>
                 <div class="faq-answer" style="display:none;">
-                    <p>It is a small fee that LCOINSWAP charges on each swap. It goes to the treasury wallet, which is public and verifiable. These funds are used exclusively for developing LCOINSWAP, security audits, and future infrastructure.</p>
+                    <p>This is the LCOINSWAP spread, used to support treasury and project development while the token is still in the bonding-curve phase.</p>
                 </div>
             </div>
             <div class="faq-item">
@@ -143,7 +158,7 @@
                     <span class="faq-icon">+</span>
                 </button>
                 <div class="faq-answer" style="display:none;">
-                    <p>Yes. LCOINSWAP never asks for your seed phrase. We only use the standard wallet connection to read your public address. Your private keys stay in your wallet at all times.</p>
+                    <p>Yes. LCOINSWAP never asks for a seed phrase. We only use standard wallet connection to read your public address. Private keys remain in the wallet.</p>
                 </div>
             </div>
             <div class="faq-item">
@@ -152,13 +167,12 @@
                     <span class="faq-icon">+</span>
                 </button>
                 <div class="faq-answer" style="display:none;">
-                    <p>Yes. During the bonding curve phase, there is a temporary limit of 5,000,000 LCOIN per address per day. This limit will be removed once the token graduates to PumpSwap.</p>
+                    <p>Yes. There is a temporary limit of 5,000,000 LCOIN per wallet per day while the token is in the bonding-curve phase.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- ===== HISTORIAL ===== -->
     <section class="history">
         <h2>Recent Swaps</h2>
         <div id="history-container" class="history-container">
@@ -166,7 +180,6 @@
         </div>
     </section>
 
-    <!-- ===== PANEL DE TRANSPARENCIA ===== -->
     <section class="transparency">
         <h2>Transparency Panel</h2>
         <div class="transparency-grid">
@@ -185,7 +198,6 @@
         </div>
     </section>
 
-    <!-- ===== FOOTER ===== -->
     <footer class="footer">
         <p class="footer-text">LCOINSWAP · The Engine of LCOIN · La tortuga no corre, camina 🐢</p>
         <div class="footer-links">
@@ -195,9 +207,22 @@
         </div>
     </footer>
 
+    <div id="wallet-modal" class="wallet-modal-overlay" aria-hidden="true">
+        <div class="wallet-modal" role="dialog" aria-modal="true" aria-labelledby="wallet-modal-title">
+            <div class="wallet-modal-header">
+                <h2 id="wallet-modal-title">Connect Wallet</h2>
+                <button id="wallet-modal-close" class="wallet-modal-close" type="button" aria-label="Close wallet selector">×</button>
+            </div>
+            <div id="wallet-options" class="wallet-list"></div>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
 
     <script src="config.js"></script>
+    <script src="wallets.js"></script>
+    <script src="slippage.js"></script>
+    <script src="validation.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
