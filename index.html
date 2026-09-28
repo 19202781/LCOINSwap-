@@ -6,12 +6,8 @@
     <title>LCOINSWAP | The Engine of LCOIN</title>
     <link rel="stylesheet" href="style.css">
     
-    <!-- Librería de Solana (se carga desde internet) -->
+    <!-- Librería de Solana desde CDN -->
     <script src="https://unpkg.com/@solana/web3.js@1.98.4/lib/index.iife.min.js"></script>
-    
-    <!-- Política de Seguridad de Contenido -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://solana-rpc.publicnode.com https://api.jup.ag https://pro-api.solscan.io;">
-    <meta http-equiv="X-Frame-Options" content="DENY">
 </head>
 <body>
     <canvas id="bubbles-canvas"></canvas>
@@ -129,7 +125,7 @@
                     <span class="faq-icon">+</span>
                 </button>
                 <div class="faq-answer" style="display:none;">
-                    <p>Your wallet app (Phantom, Solflare, etc.) calculates and shows the network fees at the moment of signing. LCOINSWAP does not calculate, set, or receive these fees. Each wallet has its own conditions and estimates.</p>
+                    <p>Your wallet app (Phantom, Solflare, etc.) calculates and shows the network fees at the moment of signing. LCOINSWAP does not calculate, set, or receive these fees.</p>
                 </div>
             </div>
             <div class="faq-item">
@@ -156,7 +152,7 @@
                     <span class="faq-icon">+</span>
                 </button>
                 <div class="faq-answer" style="display:none;">
-                    <p>Yes. During the bonding curve phase, there is a temporary limit of 5,000,000 LCOIN per address per day. This limit protects the distribution and will be removed once the token graduates to PumpSwap.</p>
+                    <p>Yes. During the bonding curve phase, there is a temporary limit of 5,000,000 LCOIN per address per day. This limit will be removed once the token graduates to PumpSwap.</p>
                 </div>
             </div>
         </div>
